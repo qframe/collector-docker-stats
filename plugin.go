@@ -190,14 +190,14 @@ func (p *Plugin) Run() {
 						b := qtypes_messages.NewTimedBase(p.Name, ce.Time)
 						h := qtypes_health.NewHealthBeat(b, "vitals", p.Name, fmt.Sprintf("%s.%s", ce.Container.ID[:13], ce.Event.Action))
 						p.QChan.SendData(h)
-						hb := qtypes_health.NewHealthBeat(b, "routine.stats", ce.Container.ID, "start")
+						hb := qtypes_health.NewHealthBeat(b, "routine.stats", ce.Container.ID[:13], "start")
 						p.QChan.SendData(hb)
 						p.StartSupervisorCe(ce)
 					case "die":
 						b := qtypes_messages.NewTimedBase(p.Name, ce.Time)
 						h := qtypes_health.NewHealthBeat(b, "vitals", p.Name, fmt.Sprintf("%s.%s", ce.Container.ID[:13], ce.Event.Action))
 						p.QChan.SendData(h)
-						hb := qtypes_health.NewHealthBeat(b, "routine.stats", ce.Container.ID, "stop")
+						hb := qtypes_health.NewHealthBeat(b, "routine.stats", ce.Container.ID[:13], "stop")
 						p.QChan.SendData(hb)
 						p.sMap[ce.Event.Actor.ID].Com <- ce.Event.Action
 					}
