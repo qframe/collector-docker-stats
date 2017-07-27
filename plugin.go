@@ -163,8 +163,8 @@ func (p *Plugin) Run() {
 		b := qtypes_messages.NewTimedBase(p.Name, time.Unix(cnt.Created, 0))
 		de := qtypes_docker_events.NewDockerEvent(b, event)
 		ce := qtypes_docker_events.NewContainerEvent(de, cjson)
-		h := qtypes_health.NewHealthBeat(b, "statsRoutine", ce.Container.ID, "start")
-		p.Log("info", "Send statsRoutine HealthBeat for "+h.Actor)
+		h := qtypes_health.NewHealthBeat(b, "routine.stats", ce.Container.ID, "start")
+		p.Log("info", "Send routine.stats HealthBeat for "+h.Actor)
 		p.QChan.SendData(h)
 		p.StartSupervisor(cnt.ID, strings.TrimPrefix(cnt.Names[0], "/"))
 	}
@@ -188,12 +188,12 @@ func (p *Plugin) Run() {
 					switch ce.Event.Action {
 					case "start":
 						b := qtypes_messages.NewTimedBase(p.Name, ce.Time)
-						hb := qtypes_health.NewHealthBeat(b, "statsRoutine", ce.Container.ID, "start")
+						hb := qtypes_health.NewHealthBeat(b, "routine.stats", ce.Container.ID, "start")
 						p.QChan.SendData(hb)
 						p.StartSupervisorCe(ce)
 					case "die":
 						b := qtypes_messages.NewTimedBase(p.Name, ce.Time)
-						hb := qtypes_health.NewHealthBeat(b, "statsRoutine", ce.Container.ID, "stop")
+						hb := qtypes_health.NewHealthBeat(b, "routine.stats", ce.Container.ID, "stop")
 						p.QChan.SendData(hb)
 						p.sMap[ce.Event.Actor.ID].Com <- ce.Event.Action
 					}
