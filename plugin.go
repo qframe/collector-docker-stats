@@ -163,7 +163,7 @@ func (p *Plugin) Run() {
 		b := qtypes_messages.NewTimedBase(p.Name, time.Unix(cnt.Created, 0))
 		de := qtypes_docker_events.NewDockerEvent(b, event)
 		ce := qtypes_docker_events.NewContainerEvent(de, cjson)
-		h := qtypes_health.NewHealthBeat(b, "routine.stats", ce.Container.ID, "start")
+		h := qtypes_health.NewHealthBeat(b, "routine.stats", ce.Container.ID[:13], "start")
 		p.Log("info", "Send routine.stats HealthBeat for "+h.Actor)
 		p.QChan.SendData(h)
 		p.StartSupervisor(cnt.ID, strings.TrimPrefix(cnt.Names[0], "/"))
