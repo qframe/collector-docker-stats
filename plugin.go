@@ -8,13 +8,14 @@ import (
 	"time"
 	"github.com/zpatrick/go-config"
 	"github.com/fsouza/go-dockerclient"
-	"github.com/qnib/qframe-types"
-	"github.com/pkg/errors"
+
 	"github.com/qframe/types/docker-events"
 	"github.com/qframe/types/messages"
 	"github.com/qframe/types/health"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/client"
+	"github.com/qframe/types/qchannel"
+	"github.com/qframe/types/plugin"
 )
 
 const (
@@ -29,92 +30,18 @@ var (
 	ctx = context.Background()
 )
 
-// struct to keep info and channels to goroutine
-// -> get heartbeats so that we know it's still alive
-// -> allow for gracefully shutdown of the supervisor
-type ContainerSupervisor struct {
-	CntID 	string 			 // ContainerID
-	CntName string			 // sanatized name of container
-	Container docker.Container
-	Com 	chan interface{} // Channel to communicate with goroutine
-	cli 	*docker.Client
-	qChan 	qtypes.QChan
-}
-
-func SplitLabels(labels []string) map[string]string {
-	res := map[string]string{}
-	for _, label := range labels {
-		tupel := strings.Split(label, "=")
-		res[tupel[0]] = tupel[1]
-	}
-	return res
-}
-
-func (cs ContainerSupervisor) Run() {
-	log.Printf("[II] Start listener for: '%s' [%s]", cs.CntName, cs.CntID)
-	// TODO: That is not realy straight forward...
-	filter := map[string][]string{
-		"id": []string{cs.CntID},
-	}
-	df := docker.ListContainersOptions{
-		Filters: filter,
-	}
-	info, _ := cs.cli.Info()
-	engineLabels := SplitLabels(info.Labels)
-	cnt, _ := cs.cli.ListContainers(df)
-	if len(cnt) != 1 {
-		log.Printf("[EE] Could not found excatly one container with id '%s'", cs.CntID)
-		return
-	}
-	errChannel := make(chan error, 1)
-	statsChannel := make(chan *docker.Stats)
-
-	opts := docker.StatsOptions{
-		ID:     cs.CntID,
-		Stats:  statsChannel,
-		Stream: true,
-	}
-
-	go func() {
-		errChannel <- cs.cli.Stats(opts)
-	}()
-
-	for {
-		select {
-		case msg := <-cs.Com:
-			switch msg {
-			case "died":
-				log.Printf("[DD] Container [%s]->'%s' died -> BYE!", cs.CntID, cs.CntName)
-				return
-			default:
-				log.Printf("[DD] Container [%s]->'%s' got message from cs.Com: %v\n", cs.CntID, cs.CntName, msg)
-			}
-		case stats, ok := <-statsChannel:
-			if !ok {
-				err := errors.New(fmt.Sprintf("Bad response getting stats for container: %s", cs.CntID))
-				log.Println(err.Error())
-				return
-			}
-			qs := qtypes.NewContainerStats("docker-stats", stats, cnt[0])
-			for k, v := range engineLabels {
-				qs.Container.Labels[k] = v
-			}
-			cs.qChan.Data.Send(qs)
-		}
-	}
-}
 
 type Plugin struct {
-	qtypes.Plugin
+	*qtypes_plugin.Plugin
 	cli *docker.Client
 	mobyClient *client.Client
 	sMap map[string]ContainerSupervisor
 }
 
-func New(qChan qtypes.QChan, cfg *config.Config, name string) (Plugin, error) {
+func New(qChan qtypes_qchannel.QChan, cfg *config.Config, name string) (Plugin, error) {
 	var err error
 	p := Plugin{
-		Plugin: qtypes.NewNamedPlugin(qChan, cfg, pluginTyp, pluginPkg, name, version),
+		Plugin: qtypes_plugin.NewNamedPlugin(qChan, cfg, pluginTyp, pluginPkg, name, version),
 		sMap: map[string]ContainerSupervisor{},
 	}
 	return p, err
@@ -144,7 +71,7 @@ func (p *Plugin) Run() {
 	// List of current containers
 	p.Log("info", fmt.Sprintf("Currently running containers: %d", info.ContainersRunning))
 	// Dispatch Msg Count
-	go p.DispatchMsgCount()
+	//go p.DispatchMsgCount()
 	// Start listener for each container
 	cnts, _ := p.cli.ListContainers(docker.ListContainersOptions{})
 	for _,cnt := range cnts {
@@ -219,11 +146,6 @@ func (p *Plugin) StartSupervisor(CntID, CntName string) {
 	}
 	p.sMap[CntID] = s
 	go s.Run()
-}
-
-func (p *Plugin) StartSupervisorQm(qm qtypes.QMsg) {
-	ce := qm.Data.(qtypes.ContainerEvent)
-    p.StartSupervisor(ce.Event.Actor.ID, ce.Event.Actor.Attributes["name"])
 }
 
 func (p *Plugin) StartSupervisorCe(ce qtypes_docker_events.ContainerEvent) {
